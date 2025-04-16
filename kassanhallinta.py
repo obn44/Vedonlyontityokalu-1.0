@@ -1,6 +1,8 @@
 import itertools
 import numpy as np
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
 
 st.title("Järjestelmävedonlyönnin kassanhallintatyökalu")
 
@@ -10,6 +12,7 @@ rounds = st.number_input("Kierrosten määrä", value=50, step=10)
 hit_prob = st.slider("Osumaprosentti per kohde (%)", min_value=0, max_value=100, value=70) / 100
 base_stake_per_bet = st.number_input("Peruspanos per rivi (€)", value=1.0, step=0.5)
 progression_factor = st.slider("Panoksen muutosnopeus (% per 100 € kassanmuutos)", min_value=0, max_value=100, value=10) / 100
+n_simulations = st.slider("Simulaatioiden määrä", min_value=10, max_value=1000, value=100, step=10)
 
 if system_type == "2/3":
     odds = [st.number_input(f"Kerroin kohteelle {i+1}", value=1.73, step=0.01) for i in range(3)]
@@ -34,7 +37,6 @@ def simulate_bankroll(starting_bankroll, system_type, odds, hit_probability, rou
         )
 
     for _ in range(rounds):
-        # Panos skaalataan suhteessa kassan kokoon
         stake_per_bet = base_stake_per_bet * (1 + ((bankroll - starting_bankroll) / 100) * progression_factor)
         stake_total = stake_per_bet * combos
 
@@ -49,6 +51,37 @@ def simulate_bankroll(starting_bankroll, system_type, odds, hit_probability, rou
     return bankroll_progress
 
 if st.button("Simuloi pelikassan kehitys"):
-    results = simulate_bankroll(starting_bankroll, system_type, odds, hit_prob, rounds, base_stake_per_bet, progression_factor)
-    st.line_chart(results)
-    st.success(f"Simulointi valmis! Lopullinen pelikassa: {results[-1]:.2f} €")
+    all_simulations = []
+    for _ in range(n_simulations):
+        result = simulate_bankroll(starting_bankroll, system_type, odds, hit_prob, rounds, base_stake_per_bet, progression_factor)
+        if len(result) < rounds + 1:
+            result += [np.nan] * (rounds + 1 - len(result))
+        all_simulations.append(result)
+
+    df = pd.DataFrame(all_simulations)
+    mean_progress = df.mean()
+    min_progress = df.min()
+    max_progress = df.max()
+
+    final_values = df.iloc[:, -1].dropna()
+    mean_final = final_values.mean()
+    std_final = final_values.std()
+
+    tab1, tab2 = st.tabs(["Keskiarvokäyrä", "Kaikki simulaatiot"])
+
+    with tab1:
+        st.subheader("Keskimääräinen pelikassan kehitys min-max -alueella")
+        fig, ax = plt.subplots()
+        ax.plot(mean_progress.index, mean_progress, label="Keskiarvo")
+        ax.fill_between(mean_progress.index, min_progress, max_progress, color='lightblue', alpha=0.4, label="Min-Max alue")
+        ax.set_xlabel("Kierros")
+        ax.set_ylabel("Pelikassa (€)")
+        ax.legend()
+        st.pyplot(fig)
+
+    with tab2:
+        st.subheader("Kaikki simulaatiot (Monte Carlo -tyyli)")
+        st.line_chart(df.transpose())
+
+    st.success(f"Simulointi valmis! Lopullinen pelikassa keskimäärin: {mean_final:.2f} €")
+    st.info(f"Keskihajonta lopputuloksissa: {std_final:.2f} €")
