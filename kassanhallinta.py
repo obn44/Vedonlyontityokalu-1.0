@@ -1,3 +1,4 @@
+# Päivitetty versio – pakotettu päivitys Streamlitille
 import itertools
 import numpy as np
 import streamlit as st
