@@ -12,7 +12,8 @@ starting_bankroll = st.number_input("Alkukassa (€)", value=1000, step=100)
 rounds = st.number_input("Kierrosten määrä", value=50, step=10)
 hit_prob = st.slider("Osumaprosentti per kohde (%)", min_value=0, max_value=100, value=70) / 100
 base_stake_per_bet = st.number_input("Peruspanos per rivi (€)", value=1.0, step=0.5)
-progression_factor = st.slider("Panoksen muutosnopeus (% per 100 € kassanmuutos)", min_value=0, max_value=100, value=10) / 100
+progression_factor = st.slider("Panoksen muutosnopeus (% per muutos)", min_value=0, max_value=100, value=10) / 100
+stake_adjustment_method = st.selectbox("Panoksen säätö suhteessa:", ["100 € muutos", "Prosentuaalinen muutos"])
 n_simulations = st.slider("Simulaatioiden määrä", min_value=10, max_value=1000, value=100, step=10)
 
 if system_type == "2/3":
@@ -20,7 +21,7 @@ if system_type == "2/3":
 elif system_type == "3/4":
     odds = [st.number_input(f"Kerroin kohteelle {i+1}", value=1.82, step=0.01) for i in range(4)]
 
-def simulate_bankroll(starting_bankroll, system_type, odds, hit_probability, rounds, base_stake_per_bet, progression_factor):
+def simulate_bankroll(starting_bankroll, system_type, odds, hit_probability, rounds, base_stake_per_bet, progression_factor, stake_adjustment_method):
     bankroll = starting_bankroll
     bankroll_progress = [bankroll]
 
@@ -38,9 +39,12 @@ def simulate_bankroll(starting_bankroll, system_type, odds, hit_probability, rou
         )
 
     for _ in range(rounds):
-        stake_per_bet = base_stake_per_bet * (1 + ((bankroll - starting_bankroll) / 100) * progression_factor)
-        stake_total = stake_per_bet * combos
+        if stake_adjustment_method == "100 € muutos":
+            stake_per_bet = base_stake_per_bet * (1 + ((bankroll - starting_bankroll) / 100) * progression_factor)
+        else:  # Prosentuaalinen muutos
+            stake_per_bet = base_stake_per_bet * (bankroll / starting_bankroll) ** progression_factor
 
+        stake_total = stake_per_bet * combos
         hits = np.sum(np.random.rand(len(odds)) < hit_probability)
         payout = win_multiplier(hits, stake_per_bet)
         bankroll += payout - stake_total
@@ -54,7 +58,7 @@ def simulate_bankroll(starting_bankroll, system_type, odds, hit_probability, rou
 if st.button("Simuloi pelikassan kehitys"):
     all_simulations = []
     for _ in range(n_simulations):
-        result = simulate_bankroll(starting_bankroll, system_type, odds, hit_prob, rounds, base_stake_per_bet, progression_factor)
+        result = simulate_bankroll(starting_bankroll, system_type, odds, hit_prob, rounds, base_stake_per_bet, progression_factor, stake_adjustment_method)
         if len(result) < rounds + 1:
             result += [np.nan] * (rounds + 1 - len(result))
         all_simulations.append(result)
